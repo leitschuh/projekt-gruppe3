@@ -3,7 +3,8 @@ import logging
 import apache_beam as beam
 from apache_beam.options.pipeline_options import PipelineOptions
 
-
+#--requirements_file requirements.txt --runner DirectRunner --project maxis-projekt-384312 --temp_location gs://maxis_bucket/tmp/ --region us-east1 --streaming --allow_unsafe_triggers
+#GOOGLE_APPLICATION_CREDENTIALS=C:/Users/maxil/Desktop/adc.json;GOOGLE_CLOUD_PROJECT=maxis-projekt-384312;PYTHONUNBUFFERED=1
 def log_row(row):
     logging.info(str(row))
     return row
