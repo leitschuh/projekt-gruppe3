@@ -44,12 +44,13 @@ def selectKItems(stream, n, k):
 
     print("Following are k randomly selected items");
     printArray(reservoir, k);
+    print(type(reservoir))
 
 
 # Driver Code
 
 if __name__ == "__main__":
-    stream = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    stream = [["A", "B"], ["C", "D"], ["E", "F"], ["G", "H"], ["I", "J"], ["K", "L"], ["M", "N"], ["O", "P"], ["Q", "R"], ["S", "T"]];
     n = len(stream);
     k = 5;
     selectKItems(stream, n, k);
