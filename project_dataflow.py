@@ -65,6 +65,7 @@ def main(argv=None, save_main_session=True):
     rides_windowed = (
                     rides
                     | "Parse JSON payload" >> beam.Map(json.loads)
+                    | "logging info" >> beam.Map(log_row)
                     | "Window into fixed windows" >> beam.WindowInto(FixedWindows(60),
                                                  trigger=AfterWatermark(late=Repeatedly(AfterProcessingTime(60))),
                                                  allowed_lateness=7*24*60*60,
@@ -73,7 +74,6 @@ def main(argv=None, save_main_session=True):
                     | "Sum" >> beam.CombinePerKey(sum)
                     | beam.Map(encode_data)
                     | beam.ParDo(AddWindowInfo())
-                    #| "logging info" >> beam.Map(log_row)
                     | beam.io.WriteToBigQuery(table_spec,
                                       schema=schema,
                                       write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
