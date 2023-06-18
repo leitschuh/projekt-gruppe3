@@ -10,47 +10,6 @@ from apache_beam.transforms.trigger import AccumulationMode, AfterProcessingTime
 from apache_beam.transforms.trigger import Repeatedly, AfterCount
 from apache_beam.transforms.window import FixedWindows
 
-# A utility function
-# to print an array
-def printArray(stream, n):
-    for i in range(n):
-        print(stream[i], end=" ");
-    print();
-
-
-# A function to randomly select
-# k items from stream[0..n-1].
-def selectKItems(stream, n, k):
-    i = 0;
-    # index for elements
-    # in stream[]
-
-    # reservoir[] is the output
-    # array. Initialize it with
-    # first k elements from stream[]
-    reservoir = [0] * k;
-    for i in range(k):
-        reservoir[i] = stream[i];
-
-    # Iterate from the (k+1)th
-    # element to nth element
-    while (i < n):
-        # Pick a random index
-        # from 0 to i.
-        j = random.randrange(i + 1);
-
-        # If the randomly picked
-        # index is smaller than k,
-        # then replace the element
-        # present at the index
-        # with new element from stream
-        if (j < k):
-            reservoir[j] = stream[i];
-        i += 1;
-
-    print("Following are k randomly selected items");
-    printArray(reservoir, k);
-
 def log_row(row):
     print(row)
     return row
@@ -91,15 +50,15 @@ def main(argv=None):
     pddistrict = (
         read_data
         #| "reservoire sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
-        | "Window into fixed windows" >> beam.WindowInto(FixedWindows(60 * 60 * 24),
-                                                           trigger=AfterWatermark(),
-                                                           allowed_lateness=7 * 24 * 60 * 60,
-                                                           accumulation_mode=AccumulationMode.DISCARDING)
+        #| "Window into fixed windows" >> beam.WindowInto(FixedWindows(60 * 60 * 24),
+        #                                                   trigger=AfterWatermark(),
+        #                                                   allowed_lateness=7 * 24 * 60 * 60,
+        #                                                   accumulation_mode=AccumulationMode.DISCARDING)
         | "Key Value Pairs" >> beam.Map(lambda x: (x["pddistrict"],1))
         | "Sum" >> beam.CombinePerKey(sum)
         | beam.Map(encode_data)
-        | beam.ParDo(AddWindowInfo())
-        | "logging info" >> beam.Map(log_row)
+        #| beam.ParDo(AddWindowInfo())
+        #| "logging info" >> beam.Map(log_row)
     )
 
 
