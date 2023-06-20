@@ -16,50 +16,6 @@ from geopandas import points_from_xy,read_file
 
 from apache_beam.io.gcp.internal.clients import bigquery
 
-
-# A utility function
-# to print an array
-def printArray(stream, n):
-    for i in range(n):
-        print(stream[i], end=" ");
-    print();
-
-
-# A function to randomly select
-# k items from stream[0..n-1].
-def selectKItems(stream, n, k):
-    i = 0;
-    # index for elements
-    # in stream[]
-
-    # reservoir[] is the output
-    # array. Initialize it with
-    # first k elements from stream[]
-    reservoir = [0] * k;
-    for i in range(k):
-        reservoir[i] = stream[i];
-
-    # Iterate from the (k+1)th
-    # element to nth element
-    while (i < n):
-        # Pick a random index
-        # from 0 to i.
-        j = random.randrange(i + 1);
-
-        # If the randomly picked
-        # index is smaller than k,
-        # then replace the element
-        # present at the index
-        # with new element from stream
-        if (j < k):
-            reservoir[j] = stream[i];
-        i += 1;
-
-    print("Following are k randomly selected items");
-    printArray(reservoir, k);
-    print(type(reservoir))
-
-
 def log_row(row):
     print(row)
     return row
@@ -91,19 +47,26 @@ def main(argv=None, save_main_session=True):
     rides = (
             p
             | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/maxis-projekt-384312/subscriptions/sfpd_incidents-sub",
-                                                    timestamp_attribute="timestamp",
+                                                    timestamp_attribute="Text.timestamp",
                                                     with_attributes=False
                                                     )
     )
 
-    #n = len(rides);
-    #k = 5;
-    #selectKItems(rides, n, k);
-
     rides_windowed = (
-                    rides
-                    | "Parse JSON payload" >> beam.Map(json.loads)
-                    | "logging info" >> beam.Map(log_row)
+            rides
+            | "Parse JSON payload" >> beam.Map(json.loads)
+            #| "logging info2" >> beam.Map(log_row)
+            | "Window into fixed windows" >> beam.WindowInto(FixedWindows(10),
+                                                             trigger=AfterWatermark(
+                                                           late=Repeatedly(AfterCount(1))),
+                                                           allowed_lateness=60*60*24,
+                                                         accumulation_mode=AccumulationMode.DISCARDING)
+
+            | "Key Value Pairs" >> beam.Map(lambda x: (x["pddistrict"], 1))
+            | "Sum" >> beam.CombinePerKey(sum)
+            | beam.Map(encode_data)
+            | beam.ParDo(AddWindowInfo())
+            | "logging info" >> beam.Map(log_row)
     )
 
     result = p.run()
