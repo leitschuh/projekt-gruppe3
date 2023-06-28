@@ -1,5 +1,5 @@
 
 #This is how you run the program
-java -jar bigquery-to-pubsub-event-replayer-0.1.jar --runner=DirectRunner --project=maxis-projekt-384312 --tempLocation=gs://maxis_bucket/tmp --outputTopic=projects/maxis-projekt-384312/topics/sfpd_incidents --timestampColumn=timestamp --idColumn=unique_key --lateness=3 --offset=0 --columns=category,descript,dayofweek,pddistrict,resolution,address,longitude,latitude,location,pdid --inputTable=maxis-projekt-384312.sfpd_incidents.incidents --whereClause=1=1 --queryDebug=false --lookback=86400 --sampleRate=100
+java -jar bigquery-to-pubsub-event-replayer-0.3.jar --runner=DirectRunner --project=maxis-projekt-384312 --tempLocation=gs://maxis_bucket/tmp --outputTopic=projects/maxis-projekt-384312/topics/sfpd_incidents --timestampColumn=timestamp --lateness=3 --offset=0 --columns=category,descript,dayofweek,pddistrict,resolution,address,longitude,latitude,location,pdid --inputTable=maxis-projekt-384312.sfpd_incidents.incidents --whereClause=1=1 --queryDebug=false --lookback=86400 --sampleRate=100
 #the environment variables pointing to the GOOGLE_APPLICATION_CREDENTIALS have to be set:
 set GOOGLE_APPLICATION_CREDENTIALS=C:\Users\maxil\Desktop\adc.json
