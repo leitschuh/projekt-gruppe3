@@ -1,6 +1,7 @@
 import argparse
 import logging
 import json
+import ast
 
 import random
 import apache_beam as beam
@@ -27,7 +28,7 @@ class AddWindowInfo(beam.DoFn):
 
 def encode_data(data):
     key, value = data
-    data_dict = {'borough': key, 'value': value}
+    data_dict = {'pddistrict': key, 'value': value}
     return data_dict
 
 
@@ -53,10 +54,14 @@ class SmallestDistance(beam.CombineFn):
             for j in range(i + 1, len(accumulator)):
                 event1 = accumulator[i]
                 event2 = accumulator[j]
-                distance = dst.distance(event1.location, event2.location).km
+                event1_location = ast.literal_eval(event1['location'])
+                event2_location = ast.literal_eval(event2['location'])
+                distance = dst.distance(event1_location, event2_location).km
 
                 if distance < smallest_distance:
                     smallest_distance = distance
+                    event1['min_distance'] = smallest_distance
+                    event2['min_distance'] = smallest_distance
                     smallest_events = (event1, event2)
 
         return smallest_events
@@ -91,8 +96,8 @@ def main(argv=None, save_main_session=True):
                                                              allowed_lateness=60 * 60 * 24,
                                                              accumulation_mode=AccumulationMode.DISCARDING)
 
-            | "Key Value Pairs2" >> beam.Map(lambda x: (x["borough"], x))
-            | "logging info1" >> beam.Map(log_row)
+            | "Key Value Pairs2" >> beam.Map(lambda x: (x["pddistrict"], x))
+            # | "logging info1" >> beam.Map(log_row)
             | "Sum2" >> beam.CombinePerKey(SmallestDistance())
             | beam.Map(encode_data)
             | beam.ParDo(AddWindowInfo())
