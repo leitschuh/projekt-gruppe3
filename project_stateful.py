@@ -11,7 +11,7 @@ from apache_beam.io.gcp.pubsub import WriteToPubSub
 from apache_beam.transforms.trigger import AccumulationMode, AfterProcessingTime, AfterWatermark
 from apache_beam.transforms.trigger import Repeatedly, AfterCount
 from apache_beam.transforms.window import FixedWindows
-from geopy import distance
+from geopy import distance as dst
 
 from apache_beam.io.gcp.internal.clients import bigquery
 
@@ -31,6 +31,36 @@ def encode_data(data):
     return data_dict
 
 
+class SmallestDistance(beam.CombineFn):
+    def create_accumulator(self):
+        return []
+
+    def add_input(self, accumulator, input):
+        accumulator.append(input)
+        return accumulator
+
+    def merge_accumulators(self, accumulators):
+        merged_accumulator = []
+        for acc in accumulators:
+            merged_accumulator.extend(acc)
+        return merged_accumulator
+
+    def extract_output(self, accumulator):
+        smallest_distance = float('inf')
+        smallest_events = None
+
+        for i in range(len(accumulator)):
+            for j in range(i + 1, len(accumulator)):
+                event1 = accumulator[i]
+                event2 = accumulator[j]
+                distance = dst.distance(event1.location, event2.location).km
+
+                if distance < smallest_distance:
+                    smallest_distance = distance
+                    smallest_events = (event1, event2)
+
+        return smallest_events
+
 
 def main(argv=None, save_main_session=True):
     """Main entry point; defines and runs the wordcount pipeline."""
@@ -45,7 +75,7 @@ def main(argv=None, save_main_session=True):
 
     incidents = (
             p
-            | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/maxis-projekt-384312/subscriptions/sfpd_incidents-sub",
+            | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/loyal-framework-384312/subscriptions/sfpd-sub",
                                                     timestamp_attribute="Text.timestamp",
                                                     with_attributes=False
                                                     )
@@ -61,8 +91,9 @@ def main(argv=None, save_main_session=True):
                                                              allowed_lateness=60 * 60 * 24,
                                                              accumulation_mode=AccumulationMode.DISCARDING)
 
-            | "Key Value Pairs2" >> beam.Map(lambda x: (x["category"], 1))
-            | "Sum2" >> beam.CombinePerKey(sum)
+            | "Key Value Pairs2" >> beam.Map(lambda x: (x["borough"], x))
+            | "logging info1" >> beam.Map(log_row)
+            | "Sum2" >> beam.CombinePerKey(SmallestDistance())
             | beam.Map(encode_data)
             | beam.ParDo(AddWindowInfo())
             | "logging info2" >> beam.Map(log_row)
