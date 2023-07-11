@@ -33,7 +33,12 @@ class AddWindowInfo(beam.DoFn):
 
 def encode_data(data):
     key, value = data
-    data_dict = {'borough': key, 'value': value}
+    data_dict = {'pddistrict': key, 'value': value}
+    return data_dict
+
+def encode_data2(data):
+    key, value = data
+    data_dict = {'category': key, 'value': value}
     return data_dict
 
 
@@ -49,6 +54,33 @@ def main(argv=None, save_main_session=True):
 
     p = beam.Pipeline(options=pipeline_options)
 
+    table_spec1 = bigquery.TableReference(
+        projectId='maxis-projekt-384312',
+        datasetId='sfpd_incidents',
+        tableId='aggregation_districts')
+    
+    table_spec2 = bigquery.TableReference(
+        projectId='maxis-projekt-384312',
+        datasetId='sfpd_incidents',
+        tableId='aggregation_categorys')
+    
+
+    schema1 = {'fields': [{'name': 'pddistrict', 'type': 'STRING', 'mode': 'NULLABLE'},
+                         {'name': 'value', 'type': 'FLOAT', 'mode': 'NULLABLE'},
+                         {'name': 'window_start', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'window_end', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'watermark', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'late', 'type': 'BOOLEAN', 'mode': 'NULLABLE'}]
+              }
+              
+    schema2 = {'fields': [{'name': 'category', 'type': 'STRING', 'mode': 'NULLABLE'},
+                         {'name': 'value', 'type': 'FLOAT', 'mode': 'NULLABLE'},
+                         {'name': 'window_start', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'window_end', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'watermark', 'type': 'DATETIME', 'mode': 'NULLABLE'},
+                         {'name': 'late', 'type': 'BOOLEAN', 'mode': 'NULLABLE'}]
+               }
+
     incidents = (
             p
             | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/maxis-projekt-384312/subscriptions/sfpd_incidents-sub",
@@ -56,7 +88,7 @@ def main(argv=None, save_main_session=True):
                                                     with_attributes=False
                                                     )
     )
-    """
+
     incidents_district = (
             incidents
             | "Parse JSON payload" >> beam.Map(json.loads)
@@ -69,12 +101,16 @@ def main(argv=None, save_main_session=True):
 
             | "Key Value Pairs" >> beam.Map(lambda x: (x["pddistrict"], 1))
             | "Sum" >> beam.CombinePerKey(sum)
-            | beam.Map(encode_data)
-            | beam.ParDo(AddWindowInfo())
+            | "Map" >> beam.Map(encode_data)
+            | "Add Window Info" >> beam.ParDo(AddWindowInfo())
             | "logging info" >> beam.Map(log_row)
-    ) 
+            | "Write to Big Query" >> beam.io.WriteToBigQuery(table_spec1,
+                                      schema=schema1,
+                                      write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                                      create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
+                                      batch_size=10)
+    )
     """
-
     incidents_category = (
             incidents
             | "Parse JSON payload2" >> beam.Map(json.loads)
@@ -87,11 +123,15 @@ def main(argv=None, save_main_session=True):
 
             | "Key Value Pairs2" >> beam.Map(lambda x: (x["category"], 1))
             | "Sum2" >> beam.CombinePerKey(sum)
-            | beam.Map(encode_data)
-            | beam.ParDo(AddWindowInfo())
+            | "Map2" >> beam.Map(encode_data2)
+            | "Add Window Info2" >> beam.ParDo(AddWindowInfo())
             | "logging info2" >> beam.Map(log_row)
+            | "Write to Big Query2" >> beam.io.WriteToBigQuery(table_spec2,
+                                      schema=schema2,
+                                      write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+                                      create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
     )
-
+"""
     result = p.run()
     result.wait_until_finish()
 
