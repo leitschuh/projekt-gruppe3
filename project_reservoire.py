@@ -37,13 +37,45 @@ class Reservoir:
     def get(self):
         return self.items
 
+    def merge(self, reservoir2):
+        k1 = 0
+        k2 = 0
+        S = Reservoir(self.k)  # result
+
+        print("self.get()", len(self.get()))
+        print("reservoir.get()", len(reservoir2.get()))
+
+        n1 = self.t
+        n2 = reservoir2.t
+        for i in range(0, min(n1 + n2, self.k)):
+            j = random.randint(0, n1 + n2 - 1)
+            if j < n1:
+                try:
+                    S.get().append(self.get()[k1])
+                except:
+                    print("i", i)
+                    print("k1", k1)
+                k1 += 1
+                n1 -= 1
+            else:
+                try:
+                    S.get().append(reservoir2.get()[k2])
+                except:
+                    print("i", i)
+                    print("k1", k1)
+                k2 += 1
+                n2 -= 1
+
+        S.t = self.t + reservoir2.t + self.k
+        return S
+
 
 def log_row(row):
     print(row)
     return row
 
 
-class ReservoireSampling(beam.CombineFn):
+class ReservoirSampling(beam.CombineFn):
     def create_accumulator(self):
         k = 3
         return Reservoir(k)
@@ -53,25 +85,13 @@ class ReservoireSampling(beam.CombineFn):
         return reservoir
 
     def merge_accumulators(self, reservoirs):
-        k1 = 1
-        k2 = 1
-        S = Reservoir(reservoirs[0].k) # result
+        for r in reservoirs:
+            print("r", len(r.get()))
 
-        for i in range(0, reservoirs[0].k):
-            n1 = reservoirs[0].t
-            n2 = reservoirs[1].t
-            j = random.randint(0, n1 + n2 - 1)
-            if j < n1:
-                S.get()[i] = reservoirs[0].get()[k1]
-                k1 += 1
-                n1 -= n1
-            else:
-                S.get()[i] = reservoirs[1].get()[k2]
-                k2 += 1
-                n2 -= n2
+        if len(reservoirs) == 1:
+            return reservoirs[0]
 
-        S.t = reservoirs[0].t + reservoirs[1].t + reservoirs[0].k
-        return S
+        return reservoirs[0].merge(self.merge_accumulators(reservoirs[1:]))
 
     def extract_output(self, reservoir):
         return reservoir
@@ -106,10 +126,10 @@ def main(argv=None, save_main_session=True):
     incidents = (
             p
             | 'Read from Pub/Sub' >> ReadFromPubSub(
-        subscription="projects/loyal-framework-384312/subscriptions/sfpd-sub",
-        timestamp_attribute="Text.timestamp",
-        with_attributes=False
-        )
+                subscription="projects/loyal-framework-384312/subscriptions/sfpd-sub",
+                timestamp_attribute="Text.timestamp",
+                with_attributes=False
+            )
     )
 
     incidents_category = (
@@ -119,9 +139,9 @@ def main(argv=None, save_main_session=True):
                                                               trigger=AfterWatermark(
                                                                   late=Repeatedly(AfterCount(5))),
                                                               allowed_lateness=60 * 60 * 24,
-                                                              accumulation_mode=AccumulationMode.DISCARDING)
+                                                              accumulation_mode=AccumulationMode.ACCUMULATING)
             | "Key Value Pairs2" >> beam.Map(lambda x: (x["pddistrict"], x))
-            | "Sum2" >> beam.CombinePerKey(ReservoireSampling())
+            | "Sum2" >> beam.CombinePerKey(ReservoirSampling())
             | "logging info2" >> beam.Map(log_row)
 
     )
