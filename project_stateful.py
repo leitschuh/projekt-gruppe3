@@ -11,7 +11,7 @@ from apache_beam.options.pipeline_options import SetupOptions
 from apache_beam.io.gcp.pubsub import WriteToPubSub
 from apache_beam.transforms.trigger import AccumulationMode, AfterProcessingTime, AfterWatermark
 from apache_beam.transforms.trigger import Repeatedly, AfterCount
-from apache_beam.transforms.window import FixedWindows
+from apache_beam.transforms.window import SlidingWindows
 from geopy import distance as dst
 
 from apache_beam.io.gcp.internal.clients import bigquery
@@ -30,6 +30,16 @@ def encode_data(data):
     key, value = data
     data_dict = {'pddistrict': key, 'value': value}
     return data_dict
+
+
+class PartitionData(beam.DoFn):
+    def process(self, x):
+        if x["value"] != None:
+            x["incident1"] = x["value"][0]
+            x["incident2"] = x["value"][1]
+            x["min_distance"] = x["value"][0]["min_distance"]
+            x.pop("value")
+        yield x
 
 
 class SmallestDistance(beam.CombineFn):
@@ -58,7 +68,7 @@ class SmallestDistance(beam.CombineFn):
                 event2_location = ast.literal_eval(event2['location'])
                 distance = dst.distance(event1_location, event2_location).km
 
-                if distance < smallest_distance:
+                if distance < smallest_distance and distance != 0:
                     smallest_distance = distance
                     event1['min_distance'] = smallest_distance
                     event2['min_distance'] = smallest_distance
@@ -81,27 +91,28 @@ def main(argv=None, save_main_session=True):
     incidents = (
             p
             | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/loyal-framework-384312/subscriptions/sfpd-sub",
-                                                    timestamp_attribute="Text.timestamp",
+                                                    timestamp_attribute="timestamp",
                                                     with_attributes=False
                                                     )
     )
 
     incidents_distance = (
             incidents
-            | "Parse JSON payload2" >> beam.Map(json.loads)
-            # | "logging info2" >> beam.Map(log_row)
-            | "Window into fixed windows2" >> beam.WindowInto(FixedWindows(10),
+            | "Parse JSON payload" >> beam.Map(json.loads)
+            | "Window into fixed windows" >> beam.WindowInto(SlidingWindows(60 * 60, 60 * 30),
                                                              trigger=AfterWatermark(
-                                                                 late=Repeatedly(AfterCount(10))),
+                                                                 late=Repeatedly(AfterCount(10)),
+                                                                 early=Repeatedly(AfterProcessingTime(60))
+                                                             ),
                                                              allowed_lateness=60 * 60 * 24,
-                                                             accumulation_mode=AccumulationMode.DISCARDING)
+                                                             accumulation_mode=AccumulationMode.ACCUMULATING)
 
-            | "Key Value Pairs2" >> beam.Map(lambda x: (x["pddistrict"], x))
-            # | "logging info1" >> beam.Map(log_row)
-            | "Sum2" >> beam.CombinePerKey(SmallestDistance())
+            | "Key Value Pairs" >> beam.Map(lambda x: (x["pddistrict"], x))
+            | "Calculate Smallest Distance" >> beam.CombinePerKey(SmallestDistance())
             | beam.Map(encode_data)
+            | beam.ParDo(PartitionData())
             | beam.ParDo(AddWindowInfo())
-            | "logging info2" >> beam.Map(log_row)
+            | "Log Output" >> beam.Map(log_row)
     )
 
     result = p.run()

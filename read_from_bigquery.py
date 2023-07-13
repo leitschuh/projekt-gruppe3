@@ -49,7 +49,7 @@ def main(argv=None):
 
     pddistrict = (
         read_data
-        #| "reservoire sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
+        #| "reservoir sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
         #| "Window into fixed windows" >> beam.WindowInto(FixedWindows(60 * 60 * 24),
         #                                                   trigger=AfterWatermark(),
         #                                                   allowed_lateness=7 * 24 * 60 * 60,
@@ -64,7 +64,7 @@ def main(argv=None):
 
     """dayofweek = (
         read_data
-        # | "reservoire sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
+        # | "reservoir sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
         | "Key Value Pairs 2" >> beam.Map(lambda x: (x["dayofweek"], 1))
         | "Sum 2" >> beam.CombinePerKey(sum)
         | "logging info 2" >> beam.Map(log_row)
@@ -72,7 +72,7 @@ def main(argv=None):
 
     category = (
         read_data
-        # | "reservoire sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
+        # | "reservoir sampling" >> beam.ParDo(selectKItems(read_data, len(list(read_data)), 5))
         | "Key Value Pairs 3" >> beam.Map(lambda x: (x["category"], 1))
         | "Sum 3" >> beam.CombinePerKey(sum)
         | "logging info 3" >> beam.Map(log_row)

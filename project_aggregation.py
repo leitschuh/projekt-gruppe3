@@ -55,12 +55,12 @@ def main(argv=None, save_main_session=True):
     p = beam.Pipeline(options=pipeline_options)
 
     table_spec1 = bigquery.TableReference(
-        projectId='maxis-projekt-384312',
+        projectId='loyal-framework-384312',
         datasetId='sfpd_incidents',
         tableId='aggregation_districts')
     
     table_spec2 = bigquery.TableReference(
-        projectId='maxis-projekt-384312',
+        projectId='loyal-framework-384312',
         datasetId='sfpd_incidents',
         tableId='aggregation_categorys')
     
@@ -83,7 +83,7 @@ def main(argv=None, save_main_session=True):
 
     incidents = (
             p
-            | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/maxis-projekt-384312/subscriptions/sfpd_incidents-sub",
+            | 'Read from Pub/Sub' >> ReadFromPubSub(subscription="projects/loyal-framework-384312/subscriptions/sfpd-sub",
                                                     timestamp_attribute="timestamp",
                                                     with_attributes=False
                                                     )
@@ -92,46 +92,45 @@ def main(argv=None, save_main_session=True):
     incidents_district = (
             incidents
             | "Parse JSON payload" >> beam.Map(json.loads)
-            #| "logging info2" >> beam.Map(log_row)
-            | "Window into fixed windows" >> beam.WindowInto(FixedWindows(10),
+            | "Window into fixed windows" >> beam.WindowInto(FixedWindows(60 * 60),
                                                              trigger=AfterWatermark(
-                                                           late=Repeatedly(AfterCount(1))),
-                                                           allowed_lateness=60*60*24,
-                                                         accumulation_mode=AccumulationMode.DISCARDING)
+                                                                 early=Repeatedly(AfterProcessingTime(20)),
+                                                                 late=Repeatedly(AfterCount(1))),
+                                                             allowed_lateness=60*60*24,
+                                                             accumulation_mode=AccumulationMode.DISCARDING)
 
             | "Key Value Pairs" >> beam.Map(lambda x: (x["pddistrict"], 1))
             | "Sum" >> beam.CombinePerKey(sum)
-            | "Map" >> beam.Map(encode_data)
+            | "Map Encoding" >> beam.Map(encode_data)
             | "Add Window Info" >> beam.ParDo(AddWindowInfo())
-            | "logging info" >> beam.Map(log_row)
-            | "Write to Big Query" >> beam.io.WriteToBigQuery(table_spec1,
-                                      schema=schema1,
-                                      write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                                      create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED,
-                                      batch_size=10)
+            | "Log Info" >> beam.Map(log_row)
+            # | "Write to Big Query" >> beam.io.WriteToBigQuery(table_spec1,
+            #                           schema=schema1,
+            #                           write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+            #                           create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
     )
-    """
-    incidents_category = (
-            incidents
-            | "Parse JSON payload2" >> beam.Map(json.loads)
-            # | "logging info2" >> beam.Map(log_row)
-            | "Window into fixed windows2" >> beam.WindowInto(FixedWindows(10),
-                                                             trigger=AfterWatermark(
-                                                                 late=Repeatedly(AfterCount(5))),
-                                                             allowed_lateness=60 * 60 * 24,
-                                                             accumulation_mode=AccumulationMode.DISCARDING)
 
-            | "Key Value Pairs2" >> beam.Map(lambda x: (x["category"], 1))
-            | "Sum2" >> beam.CombinePerKey(sum)
-            | "Map2" >> beam.Map(encode_data2)
-            | "Add Window Info2" >> beam.ParDo(AddWindowInfo())
-            | "logging info2" >> beam.Map(log_row)
-            | "Write to Big Query2" >> beam.io.WriteToBigQuery(table_spec2,
-                                      schema=schema2,
-                                      write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
-                                      create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
-    )
-"""
+    # incidents_category = (
+    #         incidents
+    #         | "Parse JSON payload2" >> beam.Map(json.loads)
+    #         | "Window into fixed windows" >> beam.WindowInto(FixedWindows(60 * 60),
+    #                                                          trigger=AfterWatermark(
+    #                                                              early=Repeatedly(AfterProcessingTime(20)),
+    #                                                              late=Repeatedly(AfterCount(1))),
+    #                                                          allowed_lateness=60*60*24,
+    #                                                          accumulation_mode=AccumulationMode.DISCARDING)
+    #
+    #         | "Key Value Pairs2" >> beam.Map(lambda x: (x["category"], 1))
+    #         | "Sum2" >> beam.CombinePerKey(sum)
+    #         | "Map2" >> beam.Map(encode_data2)
+    #         | "Add Window Info2" >> beam.ParDo(AddWindowInfo())
+    #         | "logging info2" >> beam.Map(log_row)
+    #         # | "Write to Big Query2" >> beam.io.WriteToBigQuery(table_spec2,
+    #         #                           schema=schema2,
+    #         #                           write_disposition=beam.io.BigQueryDisposition.WRITE_APPEND,
+    #         #                           create_disposition=beam.io.BigQueryDisposition.CREATE_IF_NEEDED)
+    # )
+
     result = p.run()
     result.wait_until_finish()
 
